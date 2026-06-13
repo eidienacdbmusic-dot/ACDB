@@ -152,11 +152,30 @@ border:1px solid rgba(255,255,255,.08);
 padding:25px;
 border-radius:18px;
 transition:.3s;
+position:relative;
 }
 
 .card:hover{
 transform:translateY(-5px);
 border-color:white;
+}
+
+.card .delete-btn{
+display:none;
+position:absolute;
+top:10px;
+right:10px;
+background:#ff4444;
+color:white;
+border:none;
+padding:5px 10px;
+border-radius:5px;
+cursor:pointer;
+font-size:12px;
+}
+
+.card:hover .delete-btn{
+display:block;
 }
 
 /* MUSIC PLAYER */
@@ -231,6 +250,25 @@ padding:12px 18px;
 border:none;
 font-weight:700;
 cursor:pointer;
+}
+
+.btn-primary{
+background:white;
+color:black;
+transition:.3s;
+}
+
+.btn-primary:hover{
+background:#ddd;
+}
+
+.btn-secondary{
+background:#333;
+color:white;
+}
+
+.btn-secondary:hover{
+background:#555;
 }
 
 /* FOOTER */
@@ -399,7 +437,7 @@ booking@adnacdbrecords.com
 <input id="artistName" placeholder="Artist Name" aria-label="Artist Name">
 <input id="artistGenre" placeholder="Genre" aria-label="Genre">
 
-<button onclick="addArtist()">
+<button class="btn-primary" onclick="addArtist()">
 ADD ARTIST
 </button>
 
@@ -413,13 +451,13 @@ ADD ARTIST
 <input id="releaseArtist" placeholder="Artist" aria-label="Artist">
 <input id="releaseAudio" placeholder="Audio URL" aria-label="Audio URL">
 
-<button onclick="addRelease()">
+<button class="btn-primary" onclick="addRelease()">
 ADD RELEASE
 </button>
 
 </div>
 
-<button onclick="logout()">
+<button class="btn-secondary" onclick="logout()">
 CLOSE DASHBOARD
 </button>
 
@@ -434,6 +472,10 @@ CLOSE DASHBOARD
 <script>
 
 let logged = false;
+
+// Storage keys
+const STORAGE_ARTISTS_KEY = 'acdb_artists';
+const STORAGE_RELEASES_KEY = 'acdb_releases';
 
 // Sanitize user input to prevent XSS attacks
 function sanitizeHTML(text) {
@@ -450,6 +492,92 @@ function isValidURL(string) {
   } catch (_) {
     return false;
   }
+}
+
+// Load data from localStorage
+function loadArtists() {
+  const stored = localStorage.getItem(STORAGE_ARTISTS_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
+function loadReleases() {
+  const stored = localStorage.getItem(STORAGE_RELEASES_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
+// Save data to localStorage
+function saveArtists(artists) {
+  localStorage.setItem(STORAGE_ARTISTS_KEY, JSON.stringify(artists));
+}
+
+function saveReleases(releases) {
+  localStorage.setItem(STORAGE_RELEASES_KEY, JSON.stringify(releases));
+}
+
+// Render artists from storage
+function renderArtists() {
+  const container = document.getElementById("artistsContainer");
+  const artists = loadArtists();
+  
+  // Clear container but keep default artists
+  container.innerHTML = `
+    <div class="card">
+      <h3>Ei-Di-EN</h3>
+      <p>Trap • Experimental • Mexico City</p>
+    </div>
+    <div class="card">
+      <h3>ACDB Collective</h3>
+      <p>Independent movement and cultural vision.</p>
+    </div>
+  `;
+  
+  // Add stored artists
+  artists.forEach((artist, index) => {
+    const artistCard = document.createElement('div');
+    artistCard.className = 'card';
+    artistCard.innerHTML = `
+      <h3>${sanitizeHTML(artist.name)}</h3>
+      <p>${sanitizeHTML(artist.genre)}</p>
+      <button class="delete-btn" onclick="deleteArtist(${index})">DELETE</button>
+    `;
+    container.appendChild(artistCard);
+  });
+}
+
+// Render releases from storage
+function renderReleases() {
+  const container = document.getElementById("releaseContainer");
+  const releases = loadReleases();
+  
+  // Clear container but keep default release
+  container.innerHTML = `
+    <div class="card">
+      <h3>NEW ERA</h3>
+      <p>Ei-Di-EN</p>
+      <audio controls>
+        <source src="">
+      </audio>
+    </div>
+  `;
+  
+  // Add stored releases
+  releases.forEach((release, index) => {
+    const releaseCard = document.createElement('div');
+    releaseCard.className = 'card';
+    
+    let audioHTML = '';
+    if(release.audio && isValidURL(release.audio)) {
+      audioHTML = `<audio controls><source src="${sanitizeHTML(release.audio)}"></audio>`;
+    }
+    
+    releaseCard.innerHTML = `
+      <h3>${sanitizeHTML(release.title)}</h3>
+      <p>${sanitizeHTML(release.artist)}</p>
+      ${audioHTML}
+      <button class="delete-btn" onclick="deleteRelease(${index})">DELETE</button>
+    `;
+    container.appendChild(releaseCard);
+  });
 }
 
 function handleLogin(event) {
@@ -483,19 +611,24 @@ function addArtist() {
     return;
   }
 
-  // Sanitize input to prevent XSS
-  const sanitizedName = sanitizeHTML(name);
-  const sanitizedGenre = sanitizeHTML(genre);
-
-  const artistCard = document.createElement('div');
-  artistCard.className = 'card';
-  artistCard.innerHTML = `<h3>${sanitizedName}</h3><p>${sanitizedGenre}</p>`;
+  // Get current artists and add new one
+  const artists = loadArtists();
+  artists.push({
+    name: name,
+    genre: genre
+  });
   
-  document.getElementById("artistsContainer").appendChild(artistCard);
+  // Save to localStorage
+  saveArtists(artists);
+  
+  // Re-render
+  renderArtists();
   
   // Clear inputs
   document.getElementById("artistName").value = "";
   document.getElementById("artistGenre").value = "";
+  
+  alert("Artist added successfully!");
 }
 
 /* ADD RELEASE */
@@ -509,32 +642,55 @@ function addRelease() {
     return;
   }
 
-  // Sanitize input to prevent XSS
-  const sanitizedTitle = sanitizeHTML(title);
-  const sanitizedArtist = sanitizeHTML(artist);
-  const sanitizedAudio = sanitizeHTML(audio);
-
-  const releaseCard = document.createElement('div');
-  releaseCard.className = 'card';
+  // Get current releases and add new one
+  const releases = loadReleases();
+  releases.push({
+    title: title,
+    artist: artist,
+    audio: audio
+  });
   
-  let audioHTML = '';
-  if(sanitizedAudio && isValidURL(sanitizedAudio)) {
-    audioHTML = `<audio controls><source src="${sanitizedAudio}"></audio>`;
-  }
+  // Save to localStorage
+  saveReleases(releases);
   
-  releaseCard.innerHTML = `
-    <h3>${sanitizedTitle}</h3>
-    <p>${sanitizedArtist}</p>
-    ${audioHTML}
-  `;
-  
-  document.getElementById("releaseContainer").appendChild(releaseCard);
+  // Re-render
+  renderReleases();
   
   // Clear inputs
   document.getElementById("releaseTitle").value = "";
   document.getElementById("releaseArtist").value = "";
   document.getElementById("releaseAudio").value = "";
+  
+  alert("Release added successfully!");
 }
+
+/* DELETE ARTIST */
+function deleteArtist(index) {
+  if(confirm("Are you sure you want to delete this artist?")) {
+    const artists = loadArtists();
+    artists.splice(index, 1);
+    saveArtists(artists);
+    renderArtists();
+    alert("Artist deleted!");
+  }
+}
+
+/* DELETE RELEASE */
+function deleteRelease(index) {
+  if(confirm("Are you sure you want to delete this release?")) {
+    const releases = loadReleases();
+    releases.splice(index, 1);
+    saveReleases(releases);
+    renderReleases();
+    alert("Release deleted!");
+  }
+}
+
+// Initialize on page load
+window.addEventListener('DOMContentLoaded', function() {
+  renderArtists();
+  renderReleases();
+});
 
 </script>
 
